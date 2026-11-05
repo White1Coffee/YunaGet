@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "yunaget",
+  "version": "${version}",
+  "name": "YunaGet",
+  "description": "Client-side automatisch verzamelen en minen met itemselectie, Xray, routes en chest-sortering.",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["nl.yunaget.client.YunaGetClient"]
+  },
+  "mixins": ["yunaget.client.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~26.3",
+    "java": ">=25",
+    "fabric-api": ">=0.165.0"
+  }
+}
