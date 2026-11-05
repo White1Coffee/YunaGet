@@ -14,8 +14,8 @@ public final class TaskManager {
         state = next; status = text;
     }
     public static void pause() {
-        paused = true; MiningTask.suspend(); NavigationManager.cancel(); DropCollectorManager.reset();
-        AutoSorterManager.abort("Gepauzeerd"); set("", TaskState.PAUSED, "Gepauzeerd; hervat via Dashboard");
+        paused = true; MiningTask.pauseBreaking(); DropCollectorManager.reset();
+        AutoSorterManager.abort("Gepauzeerd"); NavigationManager.pause();set("", TaskState.PAUSED, "Gepauzeerd; hervat via Dashboard");
     }
     public static void stop() {
         MiningTask.stop(""); NavigationManager.cancel(); AutoSorterManager.abort("Gestopt");
@@ -24,23 +24,26 @@ public final class TaskManager {
         set("", TaskState.IDLE, "Alle acties gestopt");
     }
     public static void tick(Minecraft mc) {
+        try {
         if (currentWorld != mc.level) {
             if (currentWorld != null) { pause(); InventoryTransactionManager.invalidate(); }
+            NavigationManager.resetWorld();
             currentWorld = mc.level;
         }
         InventoryTracker.tick(mc); WorldScanner.tick(mc); ChestManager.tick(mc);
         if (mc.player == null || mc.level == null || mc.player.isDeadOrDying()) {
             MiningTask.stop(""); NavigationManager.cancel(); AutoSorterManager.abort("Wereld verlaten"); return;
         }
-        if (paused || !mc.isWindowActive() || mc.isPaused()) { MiningTask.suspend(); NavigationManager.cancel(); return; }
+        if (paused || !mc.isWindowActive() || mc.isPaused()) { MiningTask.pauseBreaking(); if(NavigationManager.active())NavigationManager.pause(); return; }
         AutoSorterManager.tick(mc);
         if (AutoSorterManager.active()) { MiningTask.suspend(); return; }
         if (mc.gui.screen() != null) {
-            MiningTask.suspend(); NavigationManager.cancel();
+            MiningTask.pauseBreaking();if(NavigationManager.active())NavigationManager.pause();
             if (MiningTask.active() || YunaGetConfig.get.collector) set("Automation",TaskState.PAUSED,"GUI open; acties wachten tot sluiten");
             return;
         }
         if (DropCollectorManager.tick(mc)) { MiningTask.suspend(); return; }
         MiningTask.tick(mc);
+        } finally { NavigationManager.tick(mc); }
     }
 }

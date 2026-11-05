@@ -6,6 +6,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.*;
 import net.minecraft.world.item.ItemStack;
 import nl.yunaget.client.core.*;
+import nl.yunaget.client.navigation.NavigationOwner;
 import java.util.*;
 
 public final class AutoSorterManager {
@@ -24,7 +25,7 @@ public final class AutoSorterManager {
         var mc = Minecraft.getInstance();
         if (running || mc.player == null || mc.player.containerMenu != mc.player.inventoryMenu || InventoryTransactionManager.pending()
             || !(mc.gui.screen() == null || mc.gui.screen() instanceof YunaGetScreen)) { TaskManager.status = "Andere containeractie bezig"; return; }
-        mc.gui.setScreen(null); TaskManager.paused = false; MiningTask.suspend(); NavigationManager.cancel();
+        mc.gui.setScreen(null); TaskManager.paused = false; MiningTask.suspend(); NavigationManager.preemptFor(NavigationOwner.AUTO_SORTER);
         running = true; world = mc.level; scope = ChestManager.scope(); phase = TaskState.SEARCHING;
         opened = null; chest = null; VISITED.clear(); ticks = timeout = 0;
         reopening = reopenIssued = authoritativeReopen = false;
@@ -32,7 +33,7 @@ public final class AutoSorterManager {
     }
     public static void abort(String reason) {
         if (!running) return;
-        running = false; NavigationManager.cancel(); InventoryTransactionManager.cancel();
+        running = false; NavigationManager.cancel(NavigationOwner.AUTO_SORTER); InventoryTransactionManager.cancel();
         TaskManager.paused = true; MiningTask.suspend();
         if (chest != null) ChestManager.warnings.put(chest,reason);
         var mc = Minecraft.getInstance();
@@ -46,7 +47,7 @@ public final class AutoSorterManager {
         if (chest != null) { VISITED.add(chest); if (!warning.isEmpty()) ChestManager.warnings.put(chest,warning); }
         if (opened != null && mc.player.containerMenu == opened && opened.getCarried().isEmpty()) mc.player.closeContainer();
         opened = null; chest = null; timeout = 0; phase = TaskState.SEARCHING;
-        reopening = reopenIssued = authoritativeReopen = false; NavigationManager.cancel();
+        reopening = reopenIssued = authoritativeReopen = false; NavigationManager.cancel(NavigationOwner.AUTO_SORTER);
     }
     private static boolean movable(ItemStack stack) {
         String id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
@@ -109,15 +110,13 @@ public final class AutoSorterManager {
                 == net.minecraft.world.level.block.state.properties.ChestType.SINGLE ? 27 : 54;
             if (MiningTask.hit(p) == null) {
                 if (!c.walkToChest) { next("Niet binnen interactiebereik"); return; }
-                BlockPos approach = null;
-                for (var d : net.minecraft.core.Direction.Plane.HORIZONTAL) if (NavigationManager.walkable(p.relative(d))) { approach = p.relative(d); break; }
-                if (approach == null) { next("Geen veilige standplaats naast chest"); return; }
-                NavigationManager.request(approach); phase = TaskState.NAVIGATING; timeout = 0;
+                if(!NavigationManager.requestChest(p)){next("Geen veilige route naar chest");return;}
+                phase = TaskState.NAVIGATING; timeout = 0;
             } else phase = TaskState.INTERACTING;
         }
         if (phase == TaskState.NAVIGATING) {
             if (mc.gui.screen() != null) { abort("Andere GUI geopend"); return; }
-            if (MiningTask.hit(ChestManager.pos(chest)) != null) { NavigationManager.cancel(); phase = TaskState.INTERACTING; timeout = 0; }
+            if (MiningTask.hit(ChestManager.pos(chest)) != null) { NavigationManager.cancel(NavigationOwner.AUTO_SORTER); phase = TaskState.INTERACTING; timeout = 0; }
             else if (!NavigationManager.active()) { next("Geen pad of buiten bereik"); return; }
         }
         if (reopening) {

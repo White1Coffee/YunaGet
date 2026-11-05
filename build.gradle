@@ -16,6 +16,15 @@ dependencies {
 java { toolchain.languageVersion = JavaLanguageVersion.of(25); withSourcesJar() }
 tasks.withType(JavaCompile).configureEach { options.release = 25 }
 tasks.withType(Test).configureEach { useJUnitPlatform() }
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = 'yunaget-navigation-tests'
+        enableGameTests = false
+        enableClientGameTests = true
+        clearRunDirectory = false
+    }
+}
 processResources {
     inputs.property 'version', project.version
     filesMatching('fabric.mod.json') { expand version: project.version }

@@ -1,8 +1,8 @@
-# YunaGet v0.2.1 - automatische itemselectie, xray en navigatie
+# YunaGet v0.3 - Smart Navigation en AutoTunnel
 
 Client-side Fabric-mod voor Minecraft Java 26.3. Vereist Java 25, Fabric Loader **0.19.5+** en Fabric API **0.165.0+26.3 of nieuwer voor 26.3**. Geen servermod, OP of servercommando's nodig. De server valideert normale interacties. Lunar Client is niet apart getest.
 
-Installeer `yunaget-0.2.1.jar` in de client-modmap en verwijder eerdere YunaGet-JARs uit die map. Er mag slechts een versie tegelijk aanwezig zijn. De oude Loader-eis van 0.20.1 is al vervangen door 0.19.5; de metadata wordt daarop getest.
+Installeer `yunaget-0.3.0.jar` in de client-modmap en verwijder eerdere YunaGet-JARs uit die map. Er mag slechts een versie tegelijk aanwezig zijn. De oude Loader-eis van 0.20.1 is al vervangen door 0.19.5; de metadata wordt daarop getest.
 
 ## Zo begin je
 
@@ -20,8 +20,8 @@ Installeer `yunaget-0.2.1.jar` in de client-modmap en verwijder eerdere YunaGet-
 
 - De collector kiest het dichtstbijzijnde passende geladen item-entity waarvoor inventoryruimte is. Onbereikbare of niet-opgepakte drops krijgen tijdelijk een pauze zodat andere doelen kunnen worden geprobeerd.
 - Mining kiest het dichtstbijzijnde zichtbare bruikbare block binnen normaal interactiebereik. Is er geen direct doel, dan kiest hij een nabij bekend passend block uit de clientcache en zoekt een vrije standplaats met zicht op dat block.
-- Die standplaats wordt met gewone loopinput bereikt. De best-first routeplanner verwerkt maximaal 100 cellen per inputtick en bewaart maximaal 2048 bezochte cellen. Maximaal een block op/af; geen vliegen, teleporteren, tunnels graven of deuren bedienen.
-- Nieuwe dichterbij bekende doelen kunnen een miningroute vervangen. De nabijheidskeuze geldt voor de op dat moment bekende en bruikbare kandidaten, niet voor onbekende delen van de hele wereld. Losse drops hebben voorrang op nieuwe miningacties; sorteren heeft voorrang op beide.
+- Die standplaats wordt met gewone loopinput bereikt. De begrensde A*-routeplanner gebruikt echte routekosten en een admissibele heuristiek. Standaard verwerkt hij 100 nodes per clienttick en bewaart hij maximaal 8192 nodes. Trappen, padblokken en andere collision-vormen worden op hun werkelijke hoogte bemonsterd. Er wordt niet gevlogen, geteleporteerd of automatisch een deur bediend.
+- Een miningdoel blijft tijdens een route stabiel tot aankomst of afwijzing; bewegende drops kunnen hun route laten bijwerken. De nabijheidskeuze geldt voor de op dat moment bekende en bruikbare kandidaten, niet voor onbekende delen van de hele wereld. Losse drops hebben voorrang op nieuwe miningacties; sorteren heeft voorrang op beide.
 - AutoTool kiest bruikbaar gereedschap uit de hotbar op correcte drops, snelheid, Efficiency en minimale durability. Optioneel wordt het oorspronkelijke slot hersteld. Handmatig gekozen slots worden als nieuwe voorkeur behouden.
 - Fysiek bewegen, springen of sneaken onderbreekt AutoWalk en pauzeert automatisering. Hervat via Dashboard. Een geopend menu en een inactief venster onderbreken de bediening. Een wereld-/dimensiewissel pauzeert de taken.
 - Een volle inventory pauzeert het minen; de collector probeert alleen drops die nog passen. Een ingestelde Auto Sorter kan ruimte maken. Er worden geen items weggegooid.
@@ -100,6 +100,47 @@ Er wordt nooit bewust gedropt, een buiten-slot aangeklikt of een stack direct in
 De client kan toegang tot protected chests pas vaststellen wanneer de server reageert. Een plugin die een andere maar identiek ogende standaard chest-GUI aanbiedt kan niet altijd van een echte chest worden onderscheiden; aangepaste containerplugins moeten apart getest worden. Containers worden tijdens verificatie mogelijk zichtbaar gesloten en heropend.
 
 
+## Smart Navigation v0.3
+
+Open de nieuwe **Navigation**-tab. Standaard is de modus **WALK_ONLY**. Die gebruikt bestaande vrije routes, kan sturen/springen/veilige hoogteverschillen volgen en herberekent bij blokkades of uitblijvende voortgang.
+
+Voor AutoTunnel kies je **WALK_AND_MINE** en zet je **Enable tunnel mining** expliciet aan. Eerst wordt een bestaande vrije route geprobeerd. Pas als die ontbreekt, mag de planner obstakels als expliciete miningstappen opnemen. De optie Prefer existing paths verhoogt ook de miningkosten tijdens die fallback-zoekronde.
+
+De toegestane routeacties zijn WALK, STEP_UP, STEP_DOWN, JUMP, MINE_FORWARD, MINE_HEADROOM en MINE_FLOOR_OBSTACLE. De controller voert de miningstappen met gewone clientinteracties uit en wacht op een echte server-blockupdate voordat beweging doorgaat. Lokaal voorspelde air is geen bevestiging. Herstelt de server het block of komt geen bevestiging binnen, dan wordt het obstakel tijdelijk uitgesloten, opnieuw gepland of veilig gestopt. Er worden geen aangepaste packets verstuurd en serverweigeringen worden niet omzeild.
+
+AutoTunnel is bewust conservatief:
+
+- Alleen steenachtige vanilla-blocks uit een vaste lijst: stone, deepslate, cobblestone, cobbled_deepslate, granite, diorite, andesite, tuff, calcite, netherrack en end_stone.
+- Geen bedrock, containers, block entities, vloeistoffen of blocks die vallende blocks direct erboven ondersteunen.
+- Geen mining onder de speler of door zijn eigen ondersteunende lichaamsruimte. De vloer onder een tunnel blijft ondersteund; geen verticale schachten.
+- Alleen bekende, geladen clientgegevens, geschikt gereedschap, normale zichtlijn en normaal miningbereik.
+- Serverclaims zijn niet betrouwbaar vooraf leesbaar. De echte interactie en de serverreactie bepalen of een block kan worden verwijderd.
+
+Drop Collector gebruikt dezelfde controller en zoekt meerdere mogelijke pickup-posities, inclusief onder een zwevende drop. AutoTunnel voor drops vereist daarnaast **AutoTunnel ook voor drops**; dit staat standaard uit. Pickup wordt pas bevestigd na een server-pickupbericht voor de eigen speler plus bijgewerkte inventory. Verdwijning alleen telt niet, want een andere speler kan de drop hebben opgepakt.
+
+De Chest Auto Sorter gebruikt altijd WALK_ONLY, ook wanneer AutoTunnel globaal aan staat. Zijn bestaande containerlayout-, filter-, reserve- en transactiecontroles blijven behouden. Hij opent alleen binnen normaal interactiebereik.
+
+Er is precies een route-eigenaar actief: MINING, DROP_COLLECTOR of AUTO_SORTER. De centrale controller bewaakt de prioriteit; managers mogen alleen hun eigen route annuleren. De bewegingsmixin vult zowel het gewone Input-record als de echte ClientInput-moveVector met dezelfde stuurinput. Bij pauze, noodstop, disconnect en handmatige overname wordt synthetische input vrijgegeven.
+
+### Instellingen en debugging
+
+Standaardwaarden: maximale routeafstand 48 blocks, 8192 zoeknodes, 100 nodes/tick, 3 herberekenpogingen, maximaal 24 tunnelblocks, minimaal 8 gezondheidspunten en hoogstens 1 block veilige daling. Tool-durability gebruikt de bestaande AutoTool-instelling. Deze waarden, springen, routeweergave, gevarenvermijding en debuglogging zijn instelbaar onder Navigation.
+
+Dashboard toont het doel, coordinaten, modus, navigatiestatus, huidige routeactie, routeafstand, waypoint, stappen, verwijderde obstakels en laatste fout. **Recalculate Route** sluit het menu en vraagt opnieuw een route aan. Het openen van de UI pauzeert de bediening; de laatste routegegevens blijven ter inspectie bewaard.
+
+Debuglogging meldt onder meer Target selected, Route requested/found, No safe route, Movement started, Waypoint reached, Obstacle detected, Mining started, Block update confirmed, Repath requested, Navigation completed en Navigation cancelled. Zet Debuglogging navigatie aan om die berichten in latest.log te zien.
+
+### Reproduceerbare Minecraft-acceptatietest
+
+```powershell
+./gradlew.bat build
+./gradlew.bat runClientGameTest
+```
+
+De tweede taak start een echte Minecraft-client en een tijdelijke geintegreerde server, dus laat het testvenster open tot Gradle klaar is. De ontwikkelfixtures onder src/gametest richten uitsluitend die tijdelijke testwereld in en zijn niet opgenomen in de productie-JAR. De test controleert echte clientinput en werkelijke serverposities, lopen en bochten, padblokken/trappen, verborgen targets, bevestigde tunnel-mining, bedrock/lava, bewegende drops, chest-sortering, handmatige overname en een weigering door de testserver.
+
+Het blijft een begrensde planner: zeer lange of ingewikkelde routes, bewegende obstakels, beschadigde werelddata en afwijkende serverplugins kunnen een veilige stop opleveren. Dat is geen toestemming om servervalidatie te omzeilen.
+
 ## Configuratie, build en validatie
 
 Bestaande keybinds en glowinstellingen staan in `config/yunaget.properties`. De andere instellingen, geselecteerde items, chestmarkeringen, categorieen en presets staan in `config/yunaget-v2.json`.
@@ -113,11 +154,11 @@ $env:JAVA_HOME = 'PAD/NAAR/JDK-25'
 ./gradlew.bat build
 ```
 
-Linux/macOS: `./gradlew build` (zo nodig eerst `chmod +x gradlew`). Loom 1.19.3, Minecraft 26.3, Loader 0.19.5, Fabric API 0.165.0+26.3. JAR: `build/libs/yunaget-0.2.1.jar`.
+Linux/macOS: `./gradlew build` (zo nodig eerst `chmod +x gradlew`). Loom 1.19.3, Minecraft 26.3, Loader 0.19.5, Fabric API 0.165.0+26.3. JAR: `build/libs/yunaget-0.3.0.jar`.
 
 JUnit-tests behandelen filters, categoriecycli, sorteervoorrang, reserves, containerbevestiging, state-overgangen, presets, client-only/Loader-metadata, selectie zonder aantallen, onafhankelijke vinkjes, selectiegrenzen, itemgroepen en de dichtstbijzijnde geldige kandidaat. Testrapport: `build/reports/tests/test/index.html`.
 
-**Er zijn geen Minecraft-speltests of Lunar Client-integratietests uitgevoerd.** Builds en unit tests bewijzen geen correcte zichtbare UI/rendering of universele servercompatibiliteit. Test in een testwereld:
+**Deze versie heeft een echte Minecraft 26.3-clienttest met geintegreerde Survival-server doorlopen.** Alle 11 geautomatiseerde acceptatiescenario's en 45 unit tests zijn geslaagd; zie [het bewijsoverzicht](docs/testing/navigation-v0.3.md). Externe multiplayer-plugins en Lunar Client zijn niet afzonderlijk getest. Aanvullende handmatige controles:
 
 - Zoek en vink meerdere items aan; wis de selectie, voeg groepen toe en herstart met oude configuratie.
 - Laat passende drops op verschillende afstanden liggen en controleer doelwissels, pickup, volle inventory en geen hoeveelheidsstop.

@@ -13,7 +13,7 @@ import java.util.*;
 import java.util.function.*;
 
 public final class YunaGetScreen extends Screen {
-    private enum Tab { Dashboard, Items, Mining, Collector, ESP, Storage, Settings }
+    private enum Tab { Dashboard, Items, Mining, Navigation, Collector, ESP, Storage, Settings }
     private Tab tab = Tab.Dashboard;
     private int left, top, contentX, panelWidth, rows, page, totalPages = 1;
     private String query = "", feedback = "";
@@ -24,6 +24,7 @@ public final class YunaGetScreen extends Screen {
     private final List<EditBox> textFields = new ArrayList<>();
     private EditBox search;
     private final List<String> labels = new ArrayList<>();
+    private final Map<Integer,Supplier<String>> liveLabels=new LinkedHashMap<>();
     private final List<Runnable> rowBuilders = new ArrayList<>();
     private final Map<Button,Identifier> inventoryButtons = new HashMap<>();
     private record Icon(net.minecraft.world.item.ItemStack stack,int y){}
@@ -31,15 +32,15 @@ public final class YunaGetScreen extends Screen {
     private String draftName="", draftFilters="", draftCategory="Wood", draftCategoryFilters="#minecraft:logs,minecraft:oak_planks", draftOreColor="55FFFF", draftPreset="Mijn preset";
     private int buildRow;
 
-    public YunaGetScreen() { super(Component.literal("YunaGet v0.2.1")); }
+    public YunaGetScreen() { super(Component.literal("YunaGet v0.3")); }
     private YunaGetConfig c() { return YunaGetConfig.get; }
     @Override protected void init() {
-        clearWidgets(); textFields.clear(); labels.clear(); rowBuilders.clear(); inventoryButtons.clear(); icons.clear(); search = null;
+        clearWidgets(); textFields.clear(); labels.clear(); liveLabels.clear();rowBuilders.clear(); inventoryButtons.clear(); icons.clear(); search = null;
         panelWidth = Math.min(780, width - 20); left = (width - panelWidth)/2; top = 10; contentX = left + 112;
         rows = Math.max(1, (height - 116)/24);
         int index = 0;
         for (Tab t : Tab.values()) {
-            button((tab == t ? "> " : "") + t.name(),left+8,top + 34 + index++*Math.max(16,Math.min(24,(height-114)/7)),94,19,() -> {
+            button((tab == t ? "> " : "") + t.name(),left+8,top + 34 + index++*Math.max(14,Math.min(24,(height-114)/8)),94,19,() -> {
                 tab = t; page = 0; editingChest = null; storageOptions = false; capturing = null; feedback = ""; init();
             });
         }
@@ -47,7 +48,7 @@ public final class YunaGetScreen extends Screen {
         button("NOODSTOP",left+8,height-52,94,20,()->{TaskManager.stop();init();});
         switch (tab) {
             case Dashboard -> dashboard(); case Items -> itemRows(false);
-            case Mining -> miningOptions(); case Collector -> collectorOptions();
+            case Mining -> miningOptions(); case Navigation -> navigationOptions();case Collector -> collectorOptions();
             case ESP -> espOptions(); case Storage -> storage(); case Settings -> settings();
         }
         if(tab!=Tab.Items&&!(tab==Tab.ESP&&entityView)){
@@ -68,6 +69,7 @@ public final class YunaGetScreen extends Screen {
         rowBuilders.add(() -> button(text,contentX,rowY(),contentWidth(),20,action));
     }
     private void note(String text) { rowBuilders.add(() -> { labels.add((rowY()+6)+":"+text); }); }
+    private void live(Supplier<String> value){rowBuilders.add(()->liveLabels.put(rowY()+6,value));}
     private void toggle(String label,BooleanSupplier get,Consumer<Boolean> set) {
         action(label+": "+(get.getAsBoolean()?"AAN":"UIT"),() -> { set.accept(!get.getAsBoolean()); YunaGetConfig.save(); init(); });
     }
@@ -90,9 +92,16 @@ public final class YunaGetScreen extends Screen {
     }
     private void dashboard() {
         action("Start automatisch verzamelen en minen",this::startAutomatic);
-        action(MiningTask.active()?"Mine-aura stoppen":"Alleen minen starten",() -> { if(MiningTask.active()) MiningTask.stop(""); else MiningTask.start(); minecraft.gui.setScreen(null); });
         action(TaskManager.paused?"Hervatten":"Pauzeren",() -> { Keybinds.run(Keybinds.Action.PAUSE); init(); });
-        action("STOP alle acties",() -> { TaskManager.stop(); init(); });
+        live(()->"Navigatie: "+NavigationManager.owner()+" | "+NavigationManager.state());
+        live(()->"Doel: "+NavigationManager.targetLabel());
+        live(()->"Coordinaten: "+(NavigationManager.targetPosition()==null?"geen":NavigationManager.targetPosition().toString()));
+        live(()->"Modus: "+c().navigationMode+" | actie: "+(NavigationManager.currentStep()==null?"geen":NavigationManager.currentStep().action()));
+        live(()->"Route: "+String.format(Locale.ROOT,"%.1f",NavigationManager.routeDistance())+" blocks | stappen "+NavigationManager.progress());
+        live(()->"Waypoint: "+(NavigationManager.currentStep()==null?"geen":NavigationManager.currentStep().destination().toString()));
+        live(()->"Obstakels verwijderd: "+NavigationManager.obstaclesRemoved());
+        live(()->"Laatste fout: "+(NavigationManager.failure.isEmpty()?"geen":NavigationManager.failure));
+        action("Recalculate Route",()->{minecraft.gui.setScreen(null);NavigationManager.recalculate();});
         action("Nu inventory sorteren",AutoSorterManager::start);
         note("AutoTool "+(c().autoTool?"AAN":"UIT")+" | Ore ESP "+(c().oreEsp?"AAN":"UIT")+" | Chest-glow "+(c().chestGlow?"AAN":"UIT"));
         action("Items aanvinken ("+c().selectedItems.size()+" geselecteerd)",()->navigate(Keybinds.Action.ITEMS));
@@ -169,12 +178,36 @@ public final class YunaGetScreen extends Screen {
         action(MiningTask.active()?"Mining: AAN (klik om te stoppen)":"Mining: UIT (klik om te starten)",() -> { Keybinds.run(Keybinds.Action.AURA); init(); });
         number("Zoekradius",c().searchRadius,1,32,n->c().searchRadius=n);
         number("Interval (ticks)",c().miningInterval,1,20,n->c().miningInterval=n);
-        toggle("Alleen zichtbare zoekdoelen",()->c().onlyVisible,v->c().onlyVisible=v);
         toggle("Xray van aangevinkte items",()->c().targetXray,v->c().targetXray=v);
         toggle("AutoTool",()->c().autoTool,v->c().autoTool=v);
         number("Min. durability",c().minDurability,0,1000,n->c().minDurability=n);
         toggle("Oorspronkelijk slot herstellen",()->c().restoreSlot,v->c().restoreSlot=v);
         note("Automatisch naar bekende blocks; minen vereist zicht en bereik.");
+    }
+    private void navigationOptions(){
+        action("Navigation Mode: "+c().navigationMode,()->{
+            c().navigationMode=c().navigationMode==nl.yunaget.client.navigation.NavigationMode.WALK_ONLY
+                ?nl.yunaget.client.navigation.NavigationMode.WALK_AND_MINE:nl.yunaget.client.navigation.NavigationMode.WALK_ONLY;
+            YunaGetConfig.save();init();
+        });
+        number("Max. routeafstand",c().maxRouteDistance,4,96,n->c().maxRouteDistance=n);
+        number("Max. zoeknodes",c().maxRouteNodes,256,32768,n->c().maxRouteNodes=n);
+        number("Zoekbudget / tick",c().routeBudget,10,500,n->c().routeBudget=n);
+        toggle("Repath on stuck",()->c().repathOnStuck,v->c().repathOnStuck=v);
+        number("Max. repath attempts",c().maxRepathAttempts,0,10,n->c().maxRepathAttempts=n);
+        toggle("Prefer existing paths",()->c().preferExistingPaths,v->c().preferExistingPaths=v);
+        toggle("Allow jumping",()->c().allowJumping,v->c().allowJumping=v);
+        toggle("Avoid dangerous blocks",()->c().safeNavigation,v->c().safeNavigation=v);
+        toggle("Show route",()->c().navigationLine,v->c().navigationLine=v);
+        toggle("Enable tunnel mining",()->c().tunnelMining,v->c().tunnelMining=v);
+        toggle("AutoTunnel ook voor drops",()->c().tunnelForDrops,v->c().tunnelForDrops=v);
+        number("Max. blocks to mine",c().maxTunnelBlocks,1,128,n->c().maxTunnelBlocks=n);
+        number("Min. tool durability",c().minDurability,0,1000,n->c().minDurability=n);
+        number("Min. health",c().minNavigationHealth,1,20,n->c().minNavigationHealth=n);
+        number("Max. veilige valhoogte",c().maxSafeFall,0,2,n->c().maxSafeFall=n);
+        toggle("Debuglogging navigatie",()->c().debugNavigation,v->c().debugNavigation=v);
+        note("Chest-routes blijven altijd WALK_ONLY.");
+        note("Geen tunnel zonder modus Walk+Mine EN Enable tunnel mining.");
     }
     private void collectorOptions() {
         toggle("Drop Collector",()->c().collector,v->{c().collector=v;TaskManager.paused=false;if(!v)NavigationManager.cancel();});
@@ -307,6 +340,7 @@ public final class YunaGetScreen extends Screen {
         g.text(font,tab+"  |  "+c().selectedItems.size()+" items aangevinkt",contentX,top+11,0xFFFFFFFF,true);
         g.outline(left+7,height-53,96,22,0xFFFF6677);
         for(String label:labels){int colon=label.indexOf(':');g.text(font,font.plainSubstrByWidth(label.substring(colon+1),contentWidth()),contentX,Integer.parseInt(label.substring(0,colon)),0xFFDDDDDD,false);}
+        for(var label:liveLabels.entrySet())g.text(font,font.plainSubstrByWidth(label.getValue().get(),contentWidth()),contentX,label.getKey(),0xFFCADFEB,false);
         for(var icon:icons)g.item(icon.stack(),contentX+30,icon.y());
         g.text(font,"Pagina "+(page+1)+"/"+totalPages,contentX+40,height-53,0xFFFFFFFF,false);
         String status=!YunaGetConfig.error.isEmpty()?YunaGetConfig.error:!Keybinds.error.isEmpty()?Keybinds.error:

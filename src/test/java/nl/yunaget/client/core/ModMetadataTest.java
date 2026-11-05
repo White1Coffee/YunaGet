@@ -16,7 +16,7 @@ class ModMetadataTest {
             assertEquals("client",json.get("environment").getAsString());
             assertFalse(json.getAsJsonObject("entrypoints").has("main"));
             assertTrue(VersionPredicate.parse(json.getAsJsonObject("depends").get("fabricloader").getAsString()).test(Version.parse("0.19.5")));
-            assertEquals("0.2.1",json.get("version").getAsString());
+            assertEquals("0.3.0",json.get("version").getAsString());
         }
     }
 }
