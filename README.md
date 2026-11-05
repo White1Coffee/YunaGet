@@ -32,7 +32,7 @@ De standaard ingeschakelde **Xray van aangevinkte items** geeft passende bekende
 
 Server-side anti-xray, niet-geladen chunks en verborgen gegevens worden niet omzeild. Xray is alleen weergave en doelinformatie: het geeft geen langer bereik en er wordt niet door muren gemined. Volledig ingebedde ertsen zonder veilige vrije standplaats/pad worden overgeslagen. Open zo nodig zelf een normale toegang.
 
-Onder Mining stel je zoekradius en alleen-zichtbare doelen in. Onder ESP zet je selectie-xray en de bestaande Ore ESP aan/uit. Ore ESP ondersteunt normale/deepslate-ertsen en ancient debris, eigen blocktypes, kleuren en afstand. Maximaal 1024 blockposities worden per tick verwerkt; caches zijn begrensd op 2048 ores en 2048 miningdoelen, de renderer op 512 outlines per frame. Updates en chunk-/wereldwissels maken caches ongeldig.
+Onder Mining stel je de zoekradius en AutoTool in. De oude onlyVisible-configuratie beperkt de navigatie niet meer. Onder ESP zet je selectie-xray en de bestaande Ore ESP aan/uit. Ore ESP ondersteunt normale/deepslate-ertsen en ancient debris, eigen blocktypes, kleuren en afstand. Maximaal 1024 blockposities worden per tick verwerkt; caches zijn begrensd op 2048 ores en 2048 miningdoelen, de renderer op 512 outlines per frame. Updates en chunk-/wereldwissels maken caches ongeldig.
 
 De miningdropkoppeling ondersteunt gewone block-items, raw ores, diamant/coal/etc., cobblestone uit stone en enkele andere vanilla-drops. Crafting/smelten wordt niet geautomatiseerd. Silk Touch en aangepaste serverloot kunnen afwijken. De groep Ertsen kiest bijvoorbeeld raw_iron en niet een vereiste hoeveelheid iron_ingot.
 
