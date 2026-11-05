@@ -18,6 +18,9 @@ public final class YunaGetConfig {
     public int searchRadius = 12, miningInterval = 1, minDurability = 10;
     public boolean onlyVisible = false, autoTool = true, restoreSlot = true;
     public boolean targetXray = true, navigationLine = true, statusHud = true;
+    public nl.yunaget.client.navigation.NavigationMode navigationMode=nl.yunaget.client.navigation.NavigationMode.WALK_ONLY;
+    public int maxRouteDistance=48,maxRouteNodes=8192,routeBudget=100,maxRepathAttempts=3,maxTunnelBlocks=24,maxSafeFall=1,minNavigationHealth=8;
+    public boolean repathOnStuck=true,preferExistingPaths=true,allowJumping=true,tunnelMining=false,tunnelForDrops=false,debugNavigation=false;
     public boolean collector, selectedDropsOnly = true, safeNavigation = true;
     public int collectorRadius = 16;
     public boolean oreEsp, throughWalls, entityGlow;
@@ -56,6 +59,10 @@ public final class YunaGetConfig {
         else if (Keybinds.item != null) get.selectedItems.add(Keybinds.item.toString());
     }
     private void validate() {
+        if(navigationMode==null)navigationMode=nl.yunaget.client.navigation.NavigationMode.WALK_ONLY;
+        maxRouteDistance=Math.clamp(maxRouteDistance,4,96);maxRouteNodes=Math.clamp(maxRouteNodes,256,32768);
+        routeBudget=Math.clamp(routeBudget,10,500);maxRepathAttempts=Math.clamp(maxRepathAttempts,0,10);
+        maxTunnelBlocks=Math.clamp(maxTunnelBlocks,1,128);maxSafeFall=Math.clamp(maxSafeFall,0,2);minNavigationHealth=Math.clamp(minNavigationHealth,1,20);
         searchRadius = Math.clamp(searchRadius, 1, 32); miningInterval = Math.clamp(miningInterval, 1, 20);
         scanRadius = Math.clamp(scanRadius, 1, 48); renderDistance = Math.clamp(renderDistance, 1, 96);
         collectorRadius = Math.clamp(collectorRadius, 1, 32); chestDistance = Math.clamp(chestDistance, 1, 48);

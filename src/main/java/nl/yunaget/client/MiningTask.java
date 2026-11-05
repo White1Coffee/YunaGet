@@ -32,8 +32,11 @@ public final class MiningTask {
         REJECTED.clear(); TaskManager.set("Mining", TaskState.SEARCHING, "Blocks zoeken");
     }
     public static void suspend() {
-        if(NavigationManager.owner().equals("Mining"))NavigationManager.cancel();
+        NavigationManager.cancel(nl.yunaget.client.navigation.NavigationOwner.MINING);
         travelTarget=null;
+        pauseBreaking();
+    }
+    public static void pauseBreaking(){
         if (target != null && Minecraft.getInstance().gameMode != null) Minecraft.getInstance().gameMode.stopDestroyBlock();
         target = null; AutoToolManager.restore();
     }
@@ -58,6 +61,7 @@ public final class MiningTask {
         if (!enabled) return;
         if (mc.level != world) { stop(""); return; }
         var c = YunaGetConfig.get; ticks++;
+        if(NavigationManager.controlsAttack())return;
         if(c.selectedItems.isEmpty()){stop("");TaskManager.set("Mining",TaskState.IDLE,"Geen items aangevinkt");return;}
         if (!InventoryTracker.hasTargetSpace()) {
             suspend(); TaskManager.set("Mining", TaskState.PAUSED, "Inventory vol; maak ruimte of sorteer"); return;
@@ -102,44 +106,27 @@ public final class MiningTask {
     }
     private static void reject(BlockPos p) { if (REJECTED.size() >= 256) REJECTED.clear(); REJECTED.put(p.immutable(), ticks + 600); }
     private static void navigateToKnown(Minecraft mc){
+        var owner=nl.yunaget.client.navigation.NavigationOwner.MINING;
         if(travelTarget!=null){
-            var closer=nl.yunaget.client.core.NearestTarget.choose(WorldScanner.mining,
-                p->!REJECTED.containsKey(p)&&mc.level.hasChunkAt(p)&&TargetManager.matches(mc.level.getBlockState(p)),
-                p->p.distSqr(mc.player.blockPosition()));
-            if(closer!=null&&closer.distSqr(mc.player.blockPosition())+0.25<travelTarget.distSqr(mc.player.blockPosition())){
-                if(NavigationManager.owner().equals("Mining"))NavigationManager.cancel();travelTarget=null;
-            }
-        }
-        if(travelTarget!=null){
-            if(!mc.level.hasChunkAt(travelTarget)||!TargetManager.matches(mc.level.getBlockState(travelTarget))){
-                if(NavigationManager.owner().equals("Mining"))NavigationManager.cancel();travelTarget=null;
-            }else if(NavigationManager.owner().equals("Mining")&&NavigationManager.active()){
-                TaskManager.set("Mining",TaskState.NAVIGATING,"Naar "+describe(travelTarget));return;
-            }else{reject(travelTarget);travelTarget=null;}
+            if(!mc.level.hasChunkAt(travelTarget)||!TargetManager.matches(mc.level.getBlockState(travelTarget))){NavigationManager.cancel(owner);travelTarget=null;}
+            else if(NavigationManager.owns(owner)){
+                if(NavigationManager.state()==nl.yunaget.client.navigation.NavigationState.PAUSED){NavigationManager.requestBlock(travelTarget);return;}
+                if(NavigationManager.active(owner)){TaskManager.set("Mining",TaskState.NAVIGATING,NavigationManager.status);return;}
+                if(NavigationManager.state()==nl.yunaget.client.navigation.NavigationState.ARRIVED&&hit(travelTarget)!=null)return;
+                reject(travelTarget);NavigationManager.cancel(owner);travelTarget=null;
+            }else{return;}
         }
         var known=nl.yunaget.client.core.NearestTarget.choose(WorldScanner.mining,
-            p->!REJECTED.containsKey(p)&&mc.level.hasChunkAt(p)&&TargetManager.matches(mc.level.getBlockState(p))
-                &&p.distSqr(mc.player.blockPosition())<=YunaGetConfig.get.searchRadius*YunaGetConfig.get.searchRadius,
+            p->!REJECTED.containsKey(p)&&!NavigationManager.rejected("block:"+p.asLong())&&mc.level.hasChunkAt(p)
+                &&TargetManager.matches(mc.level.getBlockState(p))&&p.distSqr(mc.player.blockPosition())<=YunaGetConfig.get.searchRadius*YunaGetConfig.get.searchRadius,
             p->p.distSqr(mc.player.blockPosition()));
-        if(known==null){TaskManager.set("Mining",TaskState.SEARCHING,"Geen bekend bereikbaar item in geladen omgeving");return;}
-        if(!AutoToolManager.choose(mc.level.getBlockState(known))){reject(known);TaskManager.status="Geen geschikt gereedschap voor bekend doel";return;}
-        BlockPos approach=null;double distance=Double.MAX_VALUE;
-        for(BlockPos p:BlockPos.betweenClosed(known.offset(-3,-1,-3),known.offset(3,1,3))){
-            double candidate=p.distSqr(mc.player.blockPosition());
-            if(candidate>=distance||!NavigationManager.walkable(p))continue;
-            Vec3 eye=Vec3.atBottomCenterOf(p).add(0,mc.player.getEyeHeight(),0);
-            if(eye.distanceToSqr(Vec3.atCenterOf(known))>mc.player.blockInteractionRange()*mc.player.blockInteractionRange())continue;
-            var ray=mc.level.clip(new ClipContext(eye,Vec3.atCenterOf(known),ClipContext.Block.OUTLINE,ClipContext.Fluid.NONE,mc.player));
-            if(ray.getType()!=HitResult.Type.BLOCK||!ray.getBlockPos().equals(known))continue;
-            if(YunaGetConfig.get.onlyVisible){
-                var current=mc.level.clip(new ClipContext(mc.player.getEyePosition(),Vec3.atCenterOf(known),ClipContext.Block.OUTLINE,ClipContext.Fluid.NONE,mc.player));
-                if(!current.getBlockPos().equals(known))continue;
-            }
-            approach=p.immutable();distance=candidate;
-        }
-        if(approach==null){reject(known);TaskManager.set("Mining",TaskState.SEARCHING,"Bekend block heeft geen vrije bereikbare standplaats");return;}
-        travelTarget=known;NavigationManager.request(approach,"Mining");
-        TaskManager.set("Mining",TaskState.NAVIGATING,"Naar "+describe(known));
+        if(known==null){TaskManager.set("Mining",TaskState.SEARCHING,"Geen bereikbaar bekend item; afgewezen doelen krijgen cooldown");return;}
+        if(AutoToolManager.evaluate(mc.level.getBlockState(known))==null){reject(known);TaskManager.status="Geen passend gereedschap voor "+describe(known);return;}
+        // Detection is independent of current visibility. The controller searches all safe stand positions.
+        // Actual breaking still requires the normal client raycast and normal interaction range.
+        if(NavigationManager.requestBlock(known)){
+            travelTarget=known;TaskManager.set("Mining",TaskState.NAVIGATING,"Route naar "+describe(known));
+        }else if(NavigationManager.rejected("block:"+known.asLong()))reject(known);
     }
     private static String describe(BlockPos p){
         return net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(Minecraft.getInstance().level.getBlockState(p).getBlock()).getPath().replace('_',' ')+" | "+p.toShortString();

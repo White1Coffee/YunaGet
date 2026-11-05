@@ -13,9 +13,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class KeyboardInputMixin extends ClientInput {
     @Inject(method = "tick", at = @At("TAIL"))
     private void yunaget$walk(CallbackInfo ci) {
-        if (NavigationManager.move(keyPresses)) {
-            keyPresses = new Input(true,false,false,false,NavigationManager.jump,false,false);
-            moveVector = new Vec2(0,1);
-        }
+        Input physical=keyPresses;Vec2 physicalVector=moveVector;
+        var command=NavigationManager.input(physical);
+        if(command.override()){
+            keyPresses=new Input(command.forward()>.01,command.forward()<-.01,command.left()>.01,command.left()<-.01,command.jump(),false,false);
+            moveVector=new Vec2(command.left(),command.forward());
+        }else{keyPresses=physical;moveVector=physicalVector;}
     }
 }

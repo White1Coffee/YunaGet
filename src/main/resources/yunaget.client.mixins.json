@@ -2,6 +2,6 @@
   "required": true,
   "package": "nl.yunaget.client.mixin",
   "compatibilityLevel": "JAVA_25",
-  "client": ["MinecraftMixin", "KeyboardInputMixin", "ContainerPacketsMixin", "ContainerScreenMixin", "ClientLevelMixin"],
+  "client": ["MinecraftMixin", "KeyboardInputMixin", "ClientInputAccessor", "ContainerPacketsMixin", "ContainerScreenMixin", "ClientLevelMixin"],
   "injectors": { "defaultRequire": 1 }
 }

@@ -9,6 +9,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ClientPacketListener.class)
 public abstract class ContainerPacketsMixin {
+    @Inject(method="handleTakeItemEntity",at=@At("TAIL"))
+    private void yunaget$pickup(ClientboundTakeItemEntityPacket packet,CallbackInfo ci){
+        nl.yunaget.client.DropCollectorManager.serverPickup(packet.getItemId(),packet.getPlayerId(),packet.getAmount());
+    }
+    @Inject(method="handleBlockUpdate",at=@At("TAIL"))
+    private void yunaget$block(ClientboundBlockUpdatePacket packet,CallbackInfo ci){
+        nl.yunaget.client.NavigationManager.serverBlockUpdate(packet.getPos(),packet.getBlockState());
+    }
+    @Inject(method="handleChunkBlocksUpdate",at=@At("TAIL"))
+    private void yunaget$blocks(ClientboundSectionBlocksUpdatePacket packet,CallbackInfo ci){
+        packet.runUpdates(nl.yunaget.client.NavigationManager::serverBlockUpdate);
+    }
     @Inject(method = "handleContainerContent", at = @At("TAIL"))
     private void yunaget$content(ClientboundContainerSetContentPacket packet, CallbackInfo ci) {
         InventoryTransactionManager.content(packet.containerId(),packet.items());

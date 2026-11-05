@@ -20,11 +20,11 @@ public abstract class MinecraftMixin {
 
     @Inject(method = "continueAttack", at = @At("HEAD"), cancellable = true)
     private void yunaget$continueAttack(boolean attacking, CallbackInfo ci) {
-        if (MiningTask.controlsAttack()) ci.cancel();
+        if (MiningTask.controlsAttack()||nl.yunaget.client.NavigationManager.controlsAttack()) ci.cancel();
     }
 
     @Inject(method = "startAttack", at = @At("HEAD"), cancellable = true)
     private void yunaget$startAttack(CallbackInfoReturnable<Boolean> cir) {
-        if (MiningTask.controlsAttack()) cir.setReturnValue(false);
+        if (MiningTask.controlsAttack()||nl.yunaget.client.NavigationManager.controlsAttack()) cir.setReturnValue(false);
     }
 }
